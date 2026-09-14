@@ -37,6 +37,23 @@ What you see up front is a small slice. The full tool registry lives across edit
 
 A failed tool call comes back as a normal result carrying **`isError`**, so read the result instead of expecting an exception. That covers everything *inside* a tool. Two paths above the tool layer do produce real JSON-RPC errors, and a client that assumes there are none will mis-handle them: an unrecognised method returns `MethodNotFound`, and `tools/call` without a `name` returns `InvalidParams` (`McpServer.cs`, `Handle` and `ToolsCall`). At the HTTP layer, a malformed body is a `400` carrying `ParseError`, and a JSON-RPC batch array is a `400` carrying `InvalidRequest`.
 
+### OpenCode and `sbox_editor_status`
+
+OpenCode prefixes the built-in `editor_status` tool with the MCP server name, so it appears as `sbox_editor_status`. In engine 26.08.19, calling it with no active game scene can return `null` for `ActiveScene` and `ActiveScenePath`, even though the result schema declares both fields as strings. OpenCode then rejects the result with:
+
+```text
+MCP error -32602: Structured content does not match the tool's output schema: data/ActiveScene must be string, data/ActiveScenePath must be string
+```
+
+This is an engine MCP schema bug, not a project compile failure and not a problem in this repository's `sbox_mcp_server` toolset. For a local fix in the engine, make those two `EditorStatus` properties nullable:
+
+```csharp
+public string? ActiveScene { get; set; }
+public string? ActiveScenePath { get; set; }
+```
+
+The engine should also resolve the editor tab before falling back to the game scene, using `SceneEditorSession.Active?.Scene ?? Game.ActiveScene`. Until that engine change is available, use this repository's `project_info` and `project_compilers` tools for status queries. Their nullable result fields are intentional and their schemas accept an editor with no active scene. See [issue #4](https://github.com/fobiat/sbox-skill/issues/4).
+
 ### Connecting
 
 The server is embedded in the editor process and starts with it, on by default.
